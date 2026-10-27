@@ -10,16 +10,16 @@ import argparse
 import hashlib
 import json
 import shutil
+import tempfile
 from pathlib import Path
 
 import pandas as pd
 from clearml import Dataset
 
-from prepare_data import prepare_base, prepare_iris_features, prepare_wine
+import prepare_data
 
 
 ROOT = Path(__file__).resolve().parent
-DATA = ROOT / "data"
 DOWNLOADS = ROOT.parent / "clearml-downloads-puchkova"
 PROJECT = "MIIT/MLOps/practice_3/puchkova"
 NAME = "sklearn-tabular-puchkova"
@@ -40,29 +40,44 @@ def create_dataset(version: str, description: str, tags: list[str], parents: lis
 
 
 def create_all() -> dict[str, str]:
-    prepare_base()
-    base = create_dataset("1.0.0", "Contains the original Iris dataset.", ["base"], [])
-    base.add_files(path=str(DATA / "iris.csv"))
-    base.upload()
-    base.finalize()
+    original_data_dir = prepare_data.DATA_DIR
+    try:
+        with tempfile.TemporaryDirectory(prefix="clearml-puchkova-") as temporary:
+            root = Path(temporary)
+            base_dir = root / "base"
+            prepare_data.DATA_DIR = base_dir
+            prepare_data.prepare_base()
+            base = create_dataset("1.0.0", "Contains the original Iris dataset.", ["base"], [])
+            base.add_files(path=str(base_dir / "iris.csv"))
+            base.upload()
+            base.finalize()
 
-    prepare_wine()
-    wine = create_dataset("1.1.0", "Adds Wine to the original Iris dataset.", ["wine"], [base.id])
-    wine.add_files(path=str(DATA / "wine.csv"))
-    wine.upload()
-    wine.finalize()
+            wine_dir = root / "wine"
+            shutil.copytree(base_dir, wine_dir)
+            prepare_data.DATA_DIR = wine_dir
+            prepare_data.prepare_wine()
+            wine = create_dataset(
+                "1.1.0", "Adds Wine to the original Iris dataset.", ["wine"], [base.id]
+            )
+            wine.add_files(path=str(wine_dir / "wine.csv"))
+            wine.upload()
+            wine.finalize()
 
-    prepare_base()
-    prepare_iris_features()
-    iris_features = create_dataset(
-        "2.0.0",
-        "Adds sepal_area and petal_area to Iris; branched from base.",
-        ["iris-features"],
-        [base.id],
-    )
-    iris_features.add_files(path=str(DATA / "iris.csv"))
-    iris_features.upload()
-    iris_features.finalize()
+            features_dir = root / "iris_features"
+            shutil.copytree(base_dir, features_dir)
+            prepare_data.DATA_DIR = features_dir
+            prepare_data.prepare_iris_features()
+            iris_features = create_dataset(
+                "2.0.0",
+                "Adds sepal_area and petal_area to Iris; branched from base.",
+                ["iris-features"],
+                [base.id],
+            )
+            iris_features.add_files(path=str(features_dir / "iris.csv"))
+            iris_features.upload()
+            iris_features.finalize()
+    finally:
+        prepare_data.DATA_DIR = original_data_dir
 
     ids = {
         "BASE_ID": base.id,
