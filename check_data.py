@@ -62,9 +62,9 @@ def validate_iris(frame: pd.DataFrame, expect_features: bool) -> None:
     if expect_features:
         expected_sepal = frame["sepal length (cm)"] * frame["sepal width (cm)"]
         expected_petal = frame["petal length (cm)"] * frame["petal width (cm)"]
-        if not frame["sepal_area"].equals(expected_sepal):
+        if (frame["sepal_area"] - expected_sepal).abs().max() > 1e-9:
             raise ValueError("iris.csv: incorrect sepal_area values")
-        if not frame["petal_area"].equals(expected_petal):
+        if (frame["petal_area"] - expected_petal).abs().max() > 1e-9:
             raise ValueError("iris.csv: incorrect petal_area values")
 
 
