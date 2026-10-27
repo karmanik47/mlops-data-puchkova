@@ -1,0 +1,127 @@
+"""Create and verify the three required ClearML Dataset versions.
+
+Credentials and server addresses are read exclusively from the user's ClearML SDK
+configuration. This script never stores them in the repository.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import shutil
+from pathlib import Path
+
+import pandas as pd
+from clearml import Dataset
+
+from prepare_data import prepare_base, prepare_iris_features, prepare_wine
+
+
+ROOT = Path(__file__).resolve().parent
+DATA = ROOT / "data"
+DOWNLOADS = ROOT.parent / "clearml-downloads-puchkova"
+PROJECT = "MIIT/MLOps/practice_3/puchkova"
+NAME = "sklearn-tabular-puchkova"
+IDS_FILE = ROOT / "clearml_ids.json"
+
+
+def create_dataset(version: str, description: str, tags: list[str], parents: list[str]) -> Dataset:
+    dataset = Dataset.create(
+        dataset_project=PROJECT,
+        dataset_name=NAME,
+        dataset_version=version,
+        description=description,
+        parent_datasets=parents,
+        use_current_task=False,
+    )
+    dataset.add_tags(tags)
+    return dataset
+
+
+def create_all() -> dict[str, str]:
+    prepare_base()
+    base = create_dataset("1.0.0", "Contains the original Iris dataset.", ["base"], [])
+    base.add_files(path=str(DATA / "iris.csv"))
+    base.upload()
+    base.finalize()
+
+    prepare_wine()
+    wine = create_dataset("1.1.0", "Adds Wine to the original Iris dataset.", ["wine"], [base.id])
+    wine.add_files(path=str(DATA / "wine.csv"))
+    wine.upload()
+    wine.finalize()
+
+    prepare_base()
+    prepare_iris_features()
+    iris_features = create_dataset(
+        "2.0.0",
+        "Adds sepal_area and petal_area to Iris; branched from base.",
+        ["iris-features"],
+        [base.id],
+    )
+    iris_features.add_files(path=str(DATA / "iris.csv"))
+    iris_features.upload()
+    iris_features.finalize()
+
+    ids = {
+        "BASE_ID": base.id,
+        "WINE_ID": wine.id,
+        "IRIS_FEATURES_ID": iris_features.id,
+    }
+    IDS_FILE.write_text(json.dumps(ids, indent=2) + "\n", encoding="utf-8")
+    return ids
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def inspect_all(ids: dict[str, str]) -> dict[str, object]:
+    if DOWNLOADS.exists():
+        shutil.rmtree(DOWNLOADS)
+    DOWNLOADS.mkdir(parents=True)
+    result: dict[str, object] = {}
+    for label, dataset_id in ids.items():
+        dataset = Dataset.get(dataset_id=dataset_id)
+        target = DOWNLOADS / label.lower()
+        local = Path(dataset.get_mutable_local_copy(target_folder=str(target), overwrite=False))
+        files = sorted(path.relative_to(local).as_posix() for path in local.rglob("*") if path.is_file())
+        tables = {}
+        for relative in files:
+            path = local / relative
+            frame = pd.read_csv(path)
+            tables[relative] = {
+                "sha256": sha256(path),
+                "shape": list(frame.shape),
+                "columns": list(frame.columns),
+            }
+        result[label] = {
+            "id": dataset.id,
+            "version": dataset.version,
+            "dependency_graph": dataset.get_dependency_graph(),
+            "files": files,
+            "added": sorted(dataset.list_added_files()),
+            "modified": sorted(dataset.list_modified_files()),
+            "removed": sorted(dataset.list_removed_files()),
+            "tables": tables,
+        }
+    output = ROOT / "clearml_verification.json"
+    output.write_text(json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return result
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("action", choices=("create", "verify", "all"))
+    args = parser.parse_args()
+    ids = create_all() if args.action in {"create", "all"} else json.loads(IDS_FILE.read_text(encoding="utf-8"))
+    if args.action in {"verify", "all"}:
+        print(json.dumps(inspect_all(ids), indent=2, ensure_ascii=False))
+    else:
+        print(json.dumps(ids, indent=2))
+
+
+if __name__ == "__main__":
+    main()
+

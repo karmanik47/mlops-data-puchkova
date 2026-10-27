@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.py[cod]
+.clearml.conf
+clearml.conf
+clearml_ids.json
+clearml_verification.json
+.dvc-site-cache/
+
+/data
