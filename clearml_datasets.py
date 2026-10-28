@@ -9,14 +9,45 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import tempfile
 from pathlib import Path
 
+# Some VPN/proxy configurations block GET requests with a JSON body. ClearML
+# officially supports POST for API requests for exactly this situation.
+os.environ.setdefault("CLEARML_API_DEFAULT_REQ_METHOD", "POST")
+
 import pandas as pd
+from clearml.backend_api.session.session import Session
+from clearml.backend_interface.base import InterfaceBase
 from clearml import Dataset
 
 import prepare_data
+
+# The hosted API can take longer than ClearML's 3-second initial timeout when
+# the machine is connected through a VPN/tunnel.  Later SDK requests already
+# use a much larger timeout, so only make the first authentication request
+# equally tolerant.
+Session._session_initial_timeout = (30.0, 30.0)
+Session._session_timeout = (30.0, 30.0)
+
+
+def configure_clearml_session() -> None:
+    """Use bounded retries so a network problem fails instead of hanging for hours."""
+    session = Session(
+        initialize_logging=False,
+        http_retries_config={
+            "total": 3,
+            "connect": 3,
+            "read": 3,
+            "redirect": 3,
+            "status": 3,
+            "backoff_factor": 1.0,
+            "backoff_max": 5.0,
+        },
+    )
+    InterfaceBase._set_default_session(session)
 
 
 ROOT = Path(__file__).resolve().parent
@@ -127,6 +158,7 @@ def inspect_all(ids: dict[str, str]) -> dict[str, object]:
 
 
 def main() -> None:
+    configure_clearml_session()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("action", choices=("create", "verify", "all"))
     args = parser.parse_args()

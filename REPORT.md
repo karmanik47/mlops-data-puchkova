@@ -2,7 +2,7 @@
 
 ## 1. Окружение
 
-Работа выполнена 27 октября 2026 года в отдельном Git-репозитории
+Работа выполнена 27–28 октября 2026 года в отдельном Git-репозитории
 `mlops-data-puchkova`, основная ветка — `main`.
 
 | Компонент | Зафиксированная версия |
@@ -19,7 +19,7 @@
 в `poetry.lock`. `pathspec` закреплён явно, потому что DVC 3.63.0 использует
 API, удалённый в pathspec 1.x.
 
-Репозиторий: `C:\Users\user\Desktop\mloops\mlops-data-puchkova`.
+Репозиторий: `C:\Users\user\Desktop\mloops\practice_3_result\mlops-data-puchkova`.
 Удалённый Git-сервер в доступном окружении не настроен, поэтому ссылка пока
 локальная.
 
@@ -74,7 +74,7 @@ dvc git-hook merge-driver --ancestor %O --our %A --their %B
 Remote `local-storage` расположен отдельно от Git-репозитория:
 
 ```text
-C:/Users/user/Desktop/mloops/dvc-remote-puchkova
+C:/Users/user/Desktop/mloops/practice_3_result/dvc-remote-puchkova
 ```
 
 В `.dvc/config` находится только безопасный путь; credentials отсутствуют.
@@ -84,7 +84,7 @@ C:/Users/user/Desktop/mloops/dvc-remote-puchkova
 Для проверки создан новый каталог:
 
 ```text
-C:\Users\user\Desktop\mloops\mlops-data-puchkova-clean-clone
+C:\Users\user\Desktop\mloops\practice_3_result\mlops-data-puchkova-clean-clone
 ```
 
 Он получен командой `git clone`, без копирования workspace и старого cache.
@@ -103,7 +103,7 @@ C:\Users\user\Desktop\mloops\mlops-data-puchkova-clean-clone
 
 ## 5. ClearML Dataset
 
-Подготовлен и проверен синтаксически скрипт `clearml_datasets.py`. Он использует
+Подготовлен и фактически выполнен скрипт `clearml_datasets.py`. Он использует
 требуемые уникальные имена:
 
 ```text
@@ -111,12 +111,12 @@ project: MIIT/MLOps/practice_3/puchkova
 dataset name: sklearn-tabular-puchkova
 ```
 
-Скрипт должен создать и финализировать следующую lineage:
+На ClearML Hosted Service создана и финализирована следующая lineage:
 
 ```text
-1.0.0 (BASE_ID, original Iris)
-├── 1.1.0 (WINE_ID, adds wine.csv)
-└── 2.0.0 (IRIS_FEATURES_ID, modifies iris.csv)
+1.0.0 (b98f6f5148314bf0a4579e748eab7984, original Iris)
+├── 1.1.0 (8b70f9300d3c44c4b2684b5b3852f3ff, adds wine.csv)
+└── 2.0.0 (692aa446c4174307850aae3767b14e69, modifies iris.csv)
 ```
 
 Он создаёт состояния во временных каталогах, поэтому не изменяет DVC workspace,
@@ -124,15 +124,14 @@ dataset name: sklearn-tabular-puchkova
 версии строго по ID в три отдельные пустые директории и сохраняет проверку в
 игнорируемый `clearml_verification.json`.
 
-На этой машине отсутствуют `clearml.conf`, `CLEARML_API_ACCESS_KEY` и
-`CLEARML_API_SECRET_KEY`; доступной авторизованной браузерной сессии также нет.
-Поэтому серверные Dataset нельзя честно создать, загрузить и проверить без
-выданных сервером credentials. Значения не подделывались:
+SDK настроен через пользовательский `clearml.conf`; credentials не находятся в
+Git и не записаны в файлы проекта. Все три Dataset имеют статус `Completed`.
+Фактические идентификаторы:
 
 ```text
-BASE_ID = NOT_CREATED_NO_CLEARML_CREDENTIALS
-WINE_ID = NOT_CREATED_NO_CLEARML_CREDENTIALS
-IRIS_FEATURES_ID = NOT_CREATED_NO_CLEARML_CREDENTIALS
+BASE_ID = b98f6f5148314bf0a4579e748eab7984
+WINE_ID = 8b70f9300d3c44c4b2684b5b3852f3ff
+IRIS_FEATURES_ID = 692aa446c4174307850aae3767b14e69
 ```
 
 После настройки SDK серверная часть запускается одной командой:
@@ -141,11 +140,17 @@ IRIS_FEATURES_ID = NOT_CREATED_NO_CLEARML_CREDENTIALS
 poetry run python .\clearml_datasets.py all
 ```
 
-Фактические IDs будут записаны в игнорируемый `clearml_ids.json`, а полный
+Фактические IDs записаны в игнорируемый `clearml_ids.json`, а полный
 dependency graph, списки `added`/`modified`/`removed`, формы, столбцы и SHA-256
-скачанных файлов — в `clearml_verification.json`. После успешного запуска эти
-значения нужно перенести в данный раздел отчёта. Созданные Dataset скрипт не
-удаляет.
+скачанных файлов — в `clearml_verification.json`. Проверка подтвердила:
+
+- `1.0.0`: `iris.csv`, 150 × 5;
+- `1.1.0`: наследует базу и добавляет `wine.csv`, 178 × 14;
+- `2.0.0`: наследует базу, изменяет `iris.csv` до формы 150 × 7 и добавляет
+  `sepal_area` и `petal_area`;
+- непосредственный parent обеих дочерних версий — `BASE_ID`.
+
+Созданные Dataset скрипт не удаляет.
 
 ## 6. Сравнение DVC и ClearML Dataset
 
@@ -156,11 +161,11 @@ dependency graph, списки `added`/`modified`/`removed`, формы, сто�
 | Расположение файлов | Фактические CSV попали в DVC cache и отдельный `local-storage`, но не в Git. | После `upload()` файлы должны находиться в ClearML File Server или настроенном внешнем storage. |
 | Создание дочерней версии | Создана Git-ветка, изменён workspace, повторно выполнен `dvc add`, новый `data.dvc` закоммичен. | Скрипт вызывает `Dataset.create(..., parent_datasets=[BASE_ID])` и добавляет только разницу. |
 | Переключение версии | Наблюдение: одного `git switch` было недостаточно; фактические файлы изменились после `dvc checkout`. | Версия выбирается через `Dataset.get(dataset_id=...)`, затем скачивается в отдельный каталог. |
-| Чистая машина | Проверено новым clone: `dvc pull` восстановил оба CSV из remote. | Требуются SDK-конфигурация, Dataset ID и доступ к серверному storage; фактическая проверка заблокирована отсутствием credentials. |
-| Ветвление | Две Git-ветки вышли из `data-v1` и содержали разные состояния одной DVC-директории. | Планируемые `1.1.0` и `2.0.0` имеют одного parent `BASE_ID`, а не цепочку. |
+| Чистая машина | Проверено новым clone: `dvc pull` восстановил оба CSV из remote. | Проверено повторным скачиванием каждой версии строго по Dataset ID в отдельный пустой каталог. |
+| Ветвление | Две Git-ветки вышли из `data-v1` и содержали разные состояния одной DVC-директории. | Созданные `1.1.0` и `2.0.0` имеют одного parent `BASE_ID`, а не цепочку. |
 | Слияние | DVC merge driver объединил Wine и изменённый Iris; итог проверен по содержимому и SHA-256. | ClearML обычно выражает результат новой производной Dataset version и её parents; `finalize()` сам по себе версии не сливает. |
 | Связь с Git | Прямая: Git хранит историю `data.dvc`, ветви, merge commit и тег `data-v1`. | Dataset живёт независимо на ClearML Server; связь с Git нужно фиксировать отдельно в задаче или отчёте. |
-| UI | Для локального DVC remote отдельный UI не использовался. | ClearML Web UI должен показывать версии, статус Completed и lineage после загрузки. |
+| UI | Для локального DVC remote отдельный UI не использовался. | ClearML Web UI показывает три версии, статус Completed и lineage после загрузки. |
 
 ## 7. Ответы на контрольные вопросы
 

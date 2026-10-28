@@ -2,4 +2,4 @@
     site_cache_dir = .dvc/site-cache
     remote = local-storage
 ['remote "local-storage"']
-    url = C:/Users/user/Desktop/mloops/dvc-remote-puchkova
+    url = ../../dvc-remote-puchkova
