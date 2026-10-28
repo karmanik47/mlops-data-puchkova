@@ -20,8 +20,8 @@
 API, удалённый в pathspec 1.x.
 
 Репозиторий: `C:\Users\user\Desktop\mloops\practice_3_result\mlops-data-puchkova`.
-Удалённый Git-сервер в доступном окружении не настроен, поэтому ссылка пока
-локальная.
+Удалённый Git-репозиторий:
+`https://github.com/karmanik47/mlops-data-puchkova.git`.
 
 ## 2. Подготовка и проверка таблиц
 
